@@ -171,7 +171,7 @@ scripts/check.sh
 
 `deny.toml` 的默认值（可否决）：
 
-- **许可证**：只允许和 AGPL-3.0（D29）兼容的 `MIT`、`Apache-2.0`、`BSD-2-Clause`、`BSD-3-Clause`、`ISC`、`Zlib`、`Unicode-3.0`、`MPL-2.0`。新依赖用了别的许可证时，先确认兼容，再加进列表。
+- **许可证**：只允许和 AGPL-3.0（D29）兼容的 `MIT`、`Apache-2.0`、`BSD-2-Clause`、`BSD-3-Clause`、`ISC`、`Zlib`、`Unicode-3.0`、`Unicode-DFS-2016`（comrak 的依赖 `finl_unicode` 使用）、`MPL-2.0`。新依赖用了别的许可证时，先确认兼容，再加进列表。
 - **漏洞**：RustSec 公告中的漏洞一律报错。无人维护（unmaintained）的公告只对直接依赖报错。
 - **来源**：只允许 crates.io，不允许 git 依赖。
 - **重复版本**：只警告，不报错。

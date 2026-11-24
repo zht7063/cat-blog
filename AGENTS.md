@@ -21,14 +21,12 @@ cargo sqlx prepare --workspace         # 改了 SQL 后重新生成 .sqlx/ 并�
 git config core.hooksPath .githooks    # clone 后执行一次，启用 commit-msg 检查
 ```
 
-这些脚本和配置在实施阶段 0 建立；在那之前按 conventions.md 手动遵守。
-
 ## 规则与强制手段
 
 | 规则 | 强制手段 | 详见 |
 |---|---|---|
 | `crates/core` 不依赖 axum、sqlx、tokio | `core/Cargo.toml` 不列这些依赖；`scripts/check-arch.sh` | conventions §3 |
-| SQL 只写在 `crates/server/src/db/` | `clippy.toml` 禁用 sqlx 查询 | §3、§4.2 |
+| SQL 只写在 `crates/server/src/db/` | `clippy.toml` 禁用 sqlx 查询函数；`scripts/check-arch.sh` 检查查询宏 | §3、§4.2 |
 | 内容查询都按 `blog_id` 过滤 | 只通过绑定了 `blog_id` 的句柄查询 | §3 |
 | 当前时间从 `Clock` 取，`core` 把 `now` 作参数 | `clippy.toml` 禁用 `SystemTime::now` 等 | §3、§4.2 |
 | 环境变量只在 `config.rs` 读 | `clippy.toml` 禁用 `std::env::var` 等 | §3、§4.2 |

@@ -32,11 +32,11 @@
 
 | 边界 | 规则 | 强制手段 |
 |---|---|---|
-| `core` 不依赖 Web 和数据库 | `crates/core` 不能直接或间接依赖 `axum`、`sqlx`、`tokio`、`tower`、`hyper` | `core/Cargo.toml` 不列这些依赖，代码里根本 `use` 不到；`scripts/check-arch.sh` 用 `cargo tree` 检查间接依赖 |
-| SQL 只在 `db` 模块 | 只有 `crates/server/src/db/` 能写 SQL | `clippy.toml` 禁用 sqlx 的查询宏和函数，`db/mod.rs` 顶部用 `#![expect(...)]` 放行 |
+| `core` 不依赖 Web 和数据库 | `crates/core` 不能直接或间接依赖 `axum`、`sqlx`、`tokio`、`tower`、`hyper` | `core/Cargo.toml` 不列这些依赖，代码里根本 `use` 不到；`scripts/check-arch.sh` 用 `cargo tree` 检查间接依赖（dev 依赖也算） |
+| SQL 只在 `db` 模块 | 只有 `crates/server/src/db/` 能写 SQL | `clippy.toml` 禁用 sqlx 的查询函数（含 `raw_sql` 和 `Executor` 上直接执行字符串的方法），`db/mod.rs` 用到时在顶部用 `#![expect(...)]` 放行；`scripts/check-arch.sh` 检查 `db/` 以外的 sqlx 查询宏（原因见 §4.2） |
 | 按 `blog_id` 过滤（D6） | 操作内容的查询只能通过绑定了 `blog_id` 的句柄调用，比如 `BlogDb { pool, blog_id }` 上的方法；不提供接收裸 `blog_id` 参数的公开查询函数 | 类型；评审 |
 | 环境变量只在配置模块读 | 只有 `crates/server/src/config.rs` 读环境变量和 `.env`，其他代码从 `Config` 取值 | `clippy.toml` 禁用 `std::env::var` 等，`config.rs` 放行 |
-| 当前时间从 `Clock` 取 | `server` 通过 `Clock` trait 取当前时间（生产用系统时钟，测试用可设定的时钟）；`core` 的函数把 `now` 作为参数，自己不取时间。这样定时发布（D12）、会话过期、登录限流都能在测试里控制时间 | `clippy.toml` 禁用 `SystemTime::now`、`Instant::now`、`jiff::Timestamp::now`、`jiff::Zoned::now`，`clock.rs` 放行 |
+| 当前时间从 `Clock` 取 | `server` 通过 `Clock` trait 取当前时间（生产用系统时钟，测试用可设定的时钟）；`core` 的函数把 `now` 作为参数，自己不取时间。这样定时发布（D12）、会话过期、登录限流都能在测试里控制时间 | `clippy.toml` 禁用 `SystemTime::now`、`Instant::now`、`jiff::Timestamp::now`、`jiff::ZonedDateTime::now`，`clock.rs` 放行 |
 | 文件大小 | 单个 `.rs` 文件超过 500 行警告，超过 1000 行报错（可否决） | `scripts/check-arch.sh` |
 
 ## 4. Lint
@@ -79,30 +79,52 @@ disallowed-methods = [
   { path = "std::time::SystemTime::now", reason = "用 Clock::now()（crates/server/src/clock.rs）；core 里把 now 作为参数传入" },
   { path = "std::time::Instant::now", reason = "用 Clock::now()（crates/server/src/clock.rs），测试里才能控制时间" },
   { path = "jiff::Timestamp::now", reason = "用 Clock::now()（crates/server/src/clock.rs）；core 里把 now 作为参数传入" },
-  { path = "jiff::Zoned::now", reason = "用 Clock::now() 再按站点时区转换（crates/server/src/clock.rs）" },
+  { path = "jiff::ZonedDateTime::now", reason = "用 Clock::now() 再按站点时区转换（crates/server/src/clock.rs）" },
   { path = "std::env::var", reason = "只在 crates/server/src/config.rs 读环境变量，其他地方从 Config 取值" },
   { path = "std::env::var_os", reason = "只在 crates/server/src/config.rs 读环境变量，其他地方从 Config 取值" },
   { path = "std::env::vars", reason = "只在 crates/server/src/config.rs 读环境变量，其他地方从 Config 取值" },
-  { path = "dotenvy::dotenv", reason = "只在 crates/server/src/config.rs 加载 .env" },
+  { path = "dotenvy::dotenv", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::dotenv_override", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::dotenv_iter", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_path", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_path_override", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_path_iter", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_filename", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_filename_override", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_filename_iter", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_read", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_read_override", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::from_read_iter", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::var", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
+  { path = "dotenvy::vars", reason = "只在 crates/server/src/config.rs 加载 .env 和读环境变量" },
   { path = "sqlx::query", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
   { path = "sqlx::query_as", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
   { path = "sqlx::query_scalar", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
-]
-
-disallowed-macros = [
-  { path = "sqlx::query", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
-  { path = "sqlx::query_as", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
-  { path = "sqlx::query_scalar", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::raw_sql", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::execute", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::execute_many", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::fetch", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::fetch_many", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::fetch_all", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::fetch_one", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::fetch_optional", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::prepare", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::prepare_with", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
+  { path = "sqlx::Executor::describe", reason = "SQL 只写在 crates/server/src/db/，在那里加函数再调用" },
 ]
 ```
 
 放行的写法，以 `db/mod.rs` 为例：
 
 ```rust
-#![expect(clippy::disallowed_macros, reason = "db 模块是唯一写 SQL 的地方（docs/conventions.md §3）")]
+#![expect(clippy::disallowed_methods, reason = "db 模块是唯一写 SQL 的地方（docs/conventions.md §3）")]
 ```
 
-> 落地时要验证两点：sqlx 的 `query!` 这类宏能否被 `disallowed-macros` 按路径拦住；同名的函数和宏是否互不影响。拦不住的话，改由 `scripts/check-arch.sh` 用 `rg` 检查 `db/` 以外的 `sqlx::query`。
+阶段 0 实测（Rust 1.100、clippy 1.100、sqlx 0.9.1）的结果：
+
+- `disallowed-macros` 能按路径拦住 `sqlx::query_scalar!` 这类宏，但报错挂在 crate 根上：模块、函数、语句上的 `#[expect]` 都放行不了，只有 lib.rs 的 `#![expect]` 可以，那样整个 crate 都放行了。所以 `clippy.toml` 不列 sqlx 的宏，改由 `scripts/check-arch.sh` 检查 `crates/server/src/db/` 以外的 `query…!` 宏调用和对它们的 `use`（含 `as` 别名），注释行不算。
+- 同名的函数和宏互不影响：不列宏时，宏展开后的代码不会触发 `disallowed-methods` 里的 `sqlx::query` 等函数。
+- `jiff` 1.0 把 `Zoned` 改名为 `ZonedDateTime`。路径写错时 clippy 只打一条警告（`does not refer to a reachable function`），`-D warnings` 不会把它变成错误，这条规则就悄悄失效了。所以 `scripts/check.sh` 在 clippy 输出里见到这类警告时报错。
 
 ### 4.3 检查的错误信息
 
@@ -137,11 +159,11 @@ scripts/check.sh
 | 步骤 | 命令 |
 |---|---|
 | 格式 | `cargo fmt --all --check` |
-| lint | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
+| lint | `cargo clippy --workspace --all-targets --locked -- -D warnings`；输出里有 `clippy.toml` 路径失效的警告时也报错（§4.2） |
 | 测试 | `cargo test --workspace --locked` |
 | sqlx 离线数据是否最新 | 用临时 SQLite 执行迁移后跑 `cargo sqlx prepare --workspace --check` |
 | 依赖许可证与漏洞 | `cargo deny --locked check` |
-| 架构检查 | `scripts/check-arch.sh`（`core` 的间接依赖、文件大小） |
+| 架构检查 | `scripts/check-arch.sh`（`core` 的间接依赖、`db/` 以外的 sqlx 查询宏、文件大小） |
 
 `.sqlx/` 过期时的改法：`cargo sqlx prepare --workspace`，把生成的文件一起提交。
 
@@ -150,9 +172,10 @@ scripts/check.sh
 `deny.toml` 的默认值（可否决）：
 
 - **许可证**：只允许和 AGPL-3.0（D29）兼容的 `MIT`、`Apache-2.0`、`BSD-2-Clause`、`BSD-3-Clause`、`ISC`、`Zlib`、`Unicode-3.0`、`MPL-2.0`。新依赖用了别的许可证时，先确认兼容，再加进列表。
-- **漏洞**：RustSec 公告中的漏洞一律报错。
+- **漏洞**：RustSec 公告中的漏洞一律报错。无人维护（unmaintained）的公告只对直接依赖报错。
 - **来源**：只允许 crates.io，不允许 git 依赖。
 - **重复版本**：只警告，不报错。
+- **通配版本**：依赖不能写 `*` 版本。
 
 ### 5.3 CI
 
@@ -228,7 +251,7 @@ hook 内容见附录 A。git 自动生成的 `Merge`、`Revert`、`fixup!`、`sq
 
 ## 8. 落地状态
 
-截至本文写成时，仓库里还没有代码。§4 的 `Cargo.toml` 和 `clippy.toml` 配置、`scripts/check.sh`、`scripts/check-arch.sh`、`deny.toml`、CI、`.githooks/commit-msg` 都在实施文档的**阶段 0** 建立。在那之前，提交信息也按 §6.1 手动遵守。
+§4 的 `Cargo.toml` 和 `clippy.toml` 配置、`scripts/check.sh`、`scripts/check-arch.sh`、`deny.toml`、CI、`.githooks/commit-msg` 已在实施文档的**阶段 0** 建立。和本文最初草稿的差别见 §4.2 末尾的实测结果。
 
 ## 附录 A：`.githooks/commit-msg`
 
@@ -247,7 +270,7 @@ case "$header" in
 esac
 
 fail() {
-  printf 'commit-msg: %s\n  Fix: %s\n  See: docs/conventions.md §6\n' "$1" "$2" >&2
+  printf 'Violation: %s\nFix: %s\nSee: docs/conventions.md §6\n' "$1" "$2" >&2
   exit 1
 }
 
@@ -290,19 +313,24 @@ cd "$(dirname "$0")/.."
 step() { printf '\n==> %s\n' "$*"; }
 
 export SQLX_OFFLINE=true
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
 
 step "fmt"
 cargo fmt --all --check
 
 step "clippy"
-cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee "$tmp/clippy.log"
+if grep -q 'does not refer to a reachable' "$tmp/clippy.log"; then
+  printf 'Violation: clippy.toml 里有路径找不到对应的函数，这条规则没有生效（见上面的 warning）\n' >&2
+  printf 'Fix: 按依赖当前版本的 API 改正 clippy.toml 里的路径\nSee: docs/conventions.md §4.2\n' >&2
+  exit 1
+fi
 
 step "test"
 cargo test --workspace --locked
 
 step "sqlx prepare --check"
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
 export DATABASE_URL="sqlite://$tmp/check.db"
 cargo sqlx database setup --source migrations
 SQLX_OFFLINE=false cargo sqlx prepare --workspace --check

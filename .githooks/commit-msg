@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# 校验提交信息格式，规则见 docs/conventions.md §6。
+set -euo pipefail
+export LC_ALL=C.UTF-8  # 按字符而不是字节计算长度
+
+msg_file="$1"
+header="$(sed -n '1p' "$msg_file")"
+
+# git 自动生成的提交信息不检查。
+case "$header" in
+  Merge\ *|Revert\ \"*|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;
+esac
+
+fail() {
+  printf 'Violation: %s\nFix: %s\nSee: docs/conventions.md §6\n' "$1" "$2" >&2
+  exit 1
+}
+
+types='feat|fix|docs|refactor|perf|test|build|ci|chore|deps|revert'
+scopes='core|server|deploy|docs'
+
+if ! printf '%s' "$header" | grep -Eq "^($types)(\(($scopes)\))?!?: .+"; then
+  fail "首行不符合 \"type(scope): subject\"：$header" \
+       "type 取 $types；scope 可省略，写时取 $scopes"
+fi
+
+subject="${header#*: }"
+case "$subject" in
+  [A-Z]*) fail "subject 以大写字母开头：$subject" "改成小写开头，例如 \"add slug normalization\"" ;;
+  *.|*。) fail "subject 以句号结尾：$subject" "去掉末尾的句号" ;;
+esac
+
+if [ "${#header}" -gt 72 ]; then
+  fail "首行有 ${#header} 个字符，超过 72" "缩短 subject，细节写进正文"
+fi
+
+if [ -n "$(sed -n '2p' "$msg_file")" ]; then
+  fail "首行和正文之间没有空行" "在首行后加一个空行"
+fi
+
+long_line="$(grep -v '^#' "$msg_file" | awk 'length > 100 { print; exit }')"
+if [ -n "$long_line" ]; then
+  fail "有一行超过 100 个字符：$long_line" "正文按 100 字符以内换行（链接可以单独成行，但也不能超过 100）"
+fi

@@ -1,0 +1,38 @@
+# cargo deny 配置，规则见 docs/conventions.md §5.2。
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+# 漏洞一律报错；无人维护的公告只对直接依赖报错，间接依赖的不阻塞 CI。
+unmaintained = "workspace"
+
+[licenses]
+version = 2
+# 只允许和 AGPL-3.0（D29）兼容的许可证。新依赖用了别的许可证时，先确认兼容再加进列表。
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "MPL-2.0",
+]
+
+unused-allowed-license = "allow"
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

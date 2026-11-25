@@ -8,7 +8,7 @@ use crate::frontmatter::{self, Kind, Source};
 use crate::markdown::Renderer;
 use crate::slug::Slug;
 use crate::tags::Tag;
-use crate::{ContentError, date};
+use crate::{ContentError, ContentErrorKind, date};
 
 /// 保存首页后要写进 `blogs` 的内容。
 #[derive(Debug, Clone)]
@@ -42,6 +42,18 @@ pub struct PreparedEntry {
     pub tags: Vec<Tag>,
     pub draft: bool,
     pub published_at: Option<Timestamp>,
+    /// 提交的原文里决定 slug 的那一行：手写的 `slug:`，或用来生成 slug 的 `title:`。
+    slug_line: Option<usize>,
+}
+
+impl PreparedEntry {
+    /// slug 已被同一博客的其他内容占用时给作者看的错误（D10），行号指向提交的原文。
+    pub fn slug_taken(&self) -> ContentError {
+        ContentError::new(
+            self.slug_line,
+            ContentErrorKind::SlugTaken(self.slug.as_str().to_owned()),
+        )
+    }
 }
 
 /// 处理首页原文。
@@ -76,6 +88,11 @@ pub fn prepare_entry(
     let src = Source::new(raw);
     let entry = frontmatter::parse_entry(&src, kind, tz)?;
     let slug = entry.resolve_slug(stored.map(|s| s.slug))?;
+    let slug_line = match (&entry.slug, stored) {
+        (Some(written), _) => written.line,
+        (None, Some(_)) => None,
+        (None, None) => entry.title_line,
+    };
     let html = renderer.render(entry.body)?;
     let published_at = date::published_at(
         entry.date,
@@ -93,6 +110,7 @@ pub fn prepare_entry(
         tags: entry.tags,
         draft: entry.draft,
         published_at,
+        slug_line,
     })
 }
 
@@ -144,6 +162,24 @@ mod tests {
         assert_eq!(second.slug.as_str(), "第一篇");
         assert_eq!(second.source, renamed);
         assert_eq!(second.published_at, Some(now));
+    }
+
+    #[test]
+    fn slug_taken_points_at_the_line_that_chose_the_slug() {
+        let now: Timestamp = "2026-11-24T00:00:00Z".parse().unwrap();
+        let prepare = |raw: &str| {
+            prepare_entry(&RENDERER, raw, Kind::Post, &sg(), None, now)
+                .unwrap()
+                .slug_taken()
+        };
+
+        let written = prepare("---\n# 注释\ntitle: A\nslug: Taken\n---\n");
+        assert_eq!(written.line, Some(4));
+        assert_eq!(
+            written.to_string(),
+            "第 4 行：slug \"taken\" 已被其他页面或文章使用，请换一个 slug"
+        );
+        assert_eq!(prepare("---\n\ntitle: Taken\n---\n").line, Some(3));
     }
 
     #[test]

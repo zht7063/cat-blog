@@ -49,6 +49,8 @@ pub enum ContentErrorKind {
     Tag(tags::TagError),
     Date(date::DateError),
     Slug(slug::SlugError),
+    /// slug 已被同一博客的其他页面或文章占用（D10），内容是这个 slug。
+    SlugTaken(String),
     /// slug 写成了多行或其他复杂 YAML，无法只改一行写回。
     MultilineSlug,
     /// front matter 的写法特殊（比如带引号的键名），写回 slug 后再解析得不到这个 slug。
@@ -101,6 +103,9 @@ impl fmt::Display for ContentErrorKind {
             Self::Tag(e) => e.fmt(f),
             Self::Date(e) => e.fmt(f),
             Self::Slug(e) => e.fmt(f),
+            Self::SlugTaken(slug) => {
+                write!(f, "slug \"{slug}\" 已被其他页面或文章使用，请换一个 slug")
+            }
             Self::MultilineSlug => {
                 f.write_str("slug 写成了多行，请改成单行，比如 slug: \"my-post\"")
             }

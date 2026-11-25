@@ -62,14 +62,14 @@ pub struct Entry<'a> {
     pub tags: Vec<tags::Tag>,
     pub description: String,
     pub body: Body<'a>,
-    title_line: Option<usize>,
+    pub(crate) title_line: Option<usize>,
 }
 
 /// 原文里手写的 slug，尚未规范化。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WrittenSlug {
     pub value: String,
-    line: Option<usize>,
+    pub(crate) line: Option<usize>,
 }
 
 const HOME_FIELDS: &[&str] = &["title", "description", "lang", "timezone", "nav"];

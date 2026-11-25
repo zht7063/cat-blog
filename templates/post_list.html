@@ -1,0 +1,9 @@
+{%- if items.is_empty() -%}
+<p class="empty">{{ empty }}</p>
+{%- else -%}
+<ul class="post-list">
+{%- for item in items %}
+<li><time>{{ item.date }}</time><a href="{{ item.href }}">{{ item.title }}</a></li>
+{%- endfor %}
+</ul>
+{%- endif -%}

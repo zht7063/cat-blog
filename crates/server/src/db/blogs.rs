@@ -87,6 +87,11 @@ impl BlogDb {
         })
     }
 
+    /// 博客的 id，只用于对外的稳定标识，比如 RSS 的 guid（D75）。
+    pub fn id(&self) -> i64 {
+        self.id
+    }
+
     pub async fn blog(&self) -> Result<Blog, sqlx::Error> {
         let r = sqlx::query!(
             "SELECT home_source, home_html, title, description, lang, timezone, nav_html,

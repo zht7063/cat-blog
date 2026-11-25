@@ -6,6 +6,7 @@ use cat_blog_core::frontmatter::Kind;
 use cat_blog_core::save::PreparedEntry;
 use cat_blog_core::slug::Slug;
 use cat_blog_core::tags::Tag;
+use cat_blog_core::visibility;
 use jiff::Timestamp;
 use sqlx::SqliteExecutor;
 
@@ -30,6 +31,32 @@ pub struct Post {
     pub published_at: Option<Timestamp>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+impl Post {
+    /// 公开站点能否看到这篇内容（§5.4）。
+    pub fn is_visible(&self, now: Timestamp) -> bool {
+        visibility::is_visible(self.draft, self.published_at, now)
+    }
+}
+
+/// 列表、sitemap 和 `{{ posts }}` 用的一行，不带原文和正文。
+#[derive(Debug, Clone)]
+pub struct PostSummary {
+    pub id: PostId,
+    pub slug: Slug,
+    pub title: String,
+    pub tags: Vec<Tag>,
+    pub draft: bool,
+    pub published_at: Option<Timestamp>,
+    pub updated_at: Timestamp,
+}
+
+impl PostSummary {
+    /// 公开站点能否看到这篇内容（§5.4）。
+    pub fn is_visible(&self, now: Timestamp) -> bool {
+        visibility::is_visible(self.draft, self.published_at, now)
+    }
 }
 
 /// 写入页面或文章失败。
@@ -98,6 +125,32 @@ impl TryFrom<PostRow> for Post {
             draft: r.draft != 0,
             published_at: r.published_at.map(timestamp).transpose()?,
             created_at: timestamp(r.created_at)?,
+            updated_at: timestamp(r.updated_at)?,
+        })
+    }
+}
+
+struct SummaryRow {
+    id: i64,
+    slug: String,
+    title: String,
+    tags: String,
+    draft: i64,
+    published_at: Option<i64>,
+    updated_at: i64,
+}
+
+impl TryFrom<SummaryRow> for PostSummary {
+    type Error = sqlx::Error;
+
+    fn try_from(r: SummaryRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: PostId(r.id),
+            slug: Slug::parse(&r.slug).map_err(decode_error)?,
+            title: r.title,
+            tags: parse_tags(&r.tags)?,
+            draft: r.draft != 0,
+            published_at: r.published_at.map(timestamp).transpose()?,
             updated_at: timestamp(r.updated_at)?,
         })
     }
@@ -217,6 +270,34 @@ impl BlogDb {
         .await?
         .into_iter()
         .map(Post::try_from)
+        .collect()
+    }
+
+    /// 某一类内容的摘要，按 `published_at` 倒序，没有发布时间的排在最后。给了 `tag` 时只要带这个
+    /// 标签的（D46）。不按可见性过滤，调用方用 [`PostSummary::is_visible`] 判断。
+    pub async fn summaries(
+        &self,
+        kind: Kind,
+        tag: Option<&Tag>,
+    ) -> Result<Vec<PostSummary>, sqlx::Error> {
+        let kind = kind_str(kind);
+        let tag = tag.map(Tag::as_str);
+        sqlx::query_as!(
+            SummaryRow,
+            r#"SELECT id AS "id!", slug, title, tags, draft, published_at, updated_at
+               FROM posts
+               WHERE blog_id = ? AND kind = ?
+                 AND (? IS NULL OR EXISTS (SELECT 1 FROM json_each(posts.tags) WHERE value = ?))
+               ORDER BY published_at IS NULL, published_at DESC, id DESC"#,
+            self.id,
+            kind,
+            tag,
+            tag,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(PostSummary::try_from)
         .collect()
     }
 

@@ -1,9 +1,10 @@
 use std::process::ExitCode;
+use std::sync::Arc;
 
 use cat_blog_core::markdown::Renderer;
 use cat_blog_server::clock::SystemClock;
 use cat_blog_server::config::Config;
-use cat_blog_server::{app, db, startup};
+use cat_blog_server::{AppState, app, db, startup};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -54,11 +55,13 @@ async fn serve(config: &Config) -> Result<(), Box<dyn std::error::Error + Send +
         );
     }
     let pool = db::connect(&config.database_path).await?;
-    startup::prepare(&pool, config, &SystemClock, &Renderer::new()).await?;
+    let clock = Arc::new(SystemClock);
+    let blog = startup::prepare(&pool, config, clock.as_ref(), &Renderer::new()).await?;
+    let state = AppState::new(pool.clone(), blog, config, clock);
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     tracing::info!(addr = %listener.local_addr()?, "listening");
-    axum::serve(listener, app(pool.clone()))
+    axum::serve(listener, app(state))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     pool.close().await;

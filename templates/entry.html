@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<article>
+<h1>{{ title }}</h1>
+{%- if let Some(date) = date %}
+<p class="meta"><time>{{ date }}</time></p>
+{%- endif %}
+{%- if !tags.is_empty() %}
+<p class="meta tags">{% for tag in tags %}<a href="{{ tag.href }}">#{{ tag.name }}</a>{% endfor %}</p>
+{%- endif %}
+{{ body|safe }}
+</article>
+{% endblock %}

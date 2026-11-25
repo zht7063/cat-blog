@@ -16,7 +16,7 @@ use sqlx::migrate::{MigrateError, Migrator};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous};
 
 pub use blogs::{Blog, BlogDb};
-pub use posts::{Post, PostId, WriteError};
+pub use posts::{Post, PostId, PostSummary, WriteError};
 
 static MIGRATOR: Migrator = sqlx::migrate!("../../migrations");
 

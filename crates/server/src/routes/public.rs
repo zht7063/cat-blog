@@ -9,10 +9,12 @@ use cat_blog_core::frontmatter::Kind;
 use cat_blog_core::i18n;
 use cat_blog_core::slug::{self, Slug};
 use cat_blog_core::tags::{self, Tag};
+use jiff::Timestamp;
 use serde::Deserialize;
 
 use super::{AppResult, Layout, not_found};
 use crate::AppState;
+use crate::db::Blog;
 use crate::render::{expand_posts, list_items, post_list};
 
 #[derive(Template)]
@@ -48,6 +50,11 @@ struct EntryPage<'a> {
 /// 首页正文，不另显示 h1（§8.1）。
 pub async fn home(State(state): State<AppState>) -> AppResult {
     let blog = state.blog.blog().await?;
+    render_home(&state, &blog).await
+}
+
+/// 按 `blog` 的首页和站点设置渲染首页。
+async fn render_home(state: &AppState, blog: &Blog) -> AppResult {
     let texts = i18n::texts(&blog.lang);
     let body = expand_posts(
         &state.blog,
@@ -58,7 +65,7 @@ pub async fn home(State(state): State<AppState>) -> AppResult {
     )
     .await?;
     let page = HomePage {
-        layout: Layout::new(&blog, &state.assets, "", ""),
+        layout: Layout::new(blog, &state.assets, "", ""),
         body,
     };
     Ok(Html(page.render()?).into_response())
@@ -103,24 +110,52 @@ pub async fn entry(State(state): State<AppState>, uri: Uri) -> AppResult {
     let Some(target) = resolve(uri.path()) else {
         return not_found(&state).await;
     };
-    let now = state.clock.now();
     let post = match state.blog.post_by_slug(&target.slug).await? {
-        Some(post) if post.is_visible(now) => post,
+        Some(post) if post.is_visible(state.clock.now()) => post,
         _ => return not_found(&state).await,
     };
     if !target.canonical {
         return Ok(moved_permanently(&post.slug.path(), &uri));
     }
-
     let blog = state.blog.blog().await?;
+    let view = EntryView {
+        kind: post.kind,
+        title: &post.title,
+        description: &post.description,
+        published_at: post.published_at,
+        tags: &post.tags,
+        html: &post.html,
+    };
+    render_entry(&state, &blog, view).await
+}
+
+/// 页面或文章页要显示的内容，来自库里的一行或预览时的原文。
+struct EntryView<'a> {
+    pub kind: Kind,
+    pub title: &'a str,
+    pub description: &'a str,
+    pub published_at: Option<Timestamp>,
+    pub tags: &'a [Tag],
+    pub html: &'a str,
+}
+
+/// 页面：标题和正文；文章：标题、日期、标签和正文（§8.1）。
+async fn render_entry(state: &AppState, blog: &Blog, view: EntryView<'_>) -> AppResult {
     let texts = i18n::texts(&blog.lang);
-    let body = expand_posts(&state.blog, &post.html, &blog.timezone, texts, now).await?;
-    let (date, tags) = match post.kind {
+    let body = expand_posts(
+        &state.blog,
+        view.html,
+        &blog.timezone,
+        texts,
+        state.clock.now(),
+    )
+    .await?;
+    let (date, tags) = match view.kind {
         Kind::Page => (None, Vec::new()),
         Kind::Post => (
-            post.published_at
+            view.published_at
                 .map(|t| date::format_date(t, &blog.timezone)),
-            post.tags
+            view.tags
                 .iter()
                 .map(|t| TagLink {
                     name: t.as_str().to_owned(),
@@ -130,8 +165,8 @@ pub async fn entry(State(state): State<AppState>, uri: Uri) -> AppResult {
         ),
     };
     let page = EntryPage {
-        layout: Layout::new(&blog, &state.assets, &post.title, &post.description),
-        title: post.title,
+        layout: Layout::new(blog, &state.assets, view.title, view.description),
+        title: view.title.to_owned(),
         date,
         tags,
         body,

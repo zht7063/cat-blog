@@ -83,7 +83,6 @@ impl TryFrom<PostRow> for Post {
     type Error = sqlx::Error;
 
     fn try_from(r: PostRow) -> Result<Self, sqlx::Error> {
-        let tags: Vec<String> = serde_json::from_str(&r.tags).map_err(decode_error)?;
         Ok(Self {
             id: PostId(r.id),
             kind: [Kind::Page, Kind::Post]
@@ -95,17 +94,21 @@ impl TryFrom<PostRow> for Post {
             html: r.html,
             title: r.title,
             description: r.description,
-            tags: tags
-                .iter()
-                .map(|t| Tag::parse(t))
-                .collect::<Result<_, _>>()
-                .map_err(decode_error)?,
+            tags: parse_tags(&r.tags)?,
             draft: r.draft != 0,
             published_at: r.published_at.map(timestamp).transpose()?,
             created_at: timestamp(r.created_at)?,
             updated_at: timestamp(r.updated_at)?,
         })
     }
+}
+
+fn parse_tags(json: &str) -> Result<Vec<Tag>, sqlx::Error> {
+    let tags: Vec<String> = serde_json::from_str(json).map_err(decode_error)?;
+    tags.iter()
+        .map(|t| Tag::parse(t))
+        .collect::<Result<_, _>>()
+        .map_err(decode_error)
 }
 
 /// `posts.kind` 列的取值（docs/v1.0-spec.md §6）。

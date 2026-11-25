@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -56,12 +57,14 @@ async fn serve(config: &Config) -> Result<(), Box<dyn std::error::Error + Send +
     }
     let pool = db::connect(&config.database_path).await?;
     let clock = Arc::new(SystemClock);
-    let blog = startup::prepare(&pool, config, clock.as_ref(), &Renderer::new()).await?;
-    let state = AppState::new(pool.clone(), blog, config, clock);
+    let renderer = Arc::new(Renderer::new());
+    let blog = startup::prepare(&pool, config, clock.as_ref(), &renderer).await?;
+    let state = AppState::new(pool.clone(), blog, config, clock, renderer);
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     tracing::info!(addr = %listener.local_addr()?, "listening");
-    axum::serve(listener, app(state))
+    let service = app(state).into_make_service_with_connect_info::<SocketAddr>();
+    axum::serve(listener, service)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     pool.close().await;

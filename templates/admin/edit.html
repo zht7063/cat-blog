@@ -1,0 +1,31 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<form method="post" action="{{ action }}" class="editor" data-editor{% if error.is_some() %} data-unsaved{% endif %}>
+<input type="hidden" name="_csrf" value="{{ csrf }}">
+<input type="hidden" name="target" value="{{ target }}">
+{%- if let Some(id) = id %}
+<input type="hidden" name="id" value="{{ id }}">
+{%- endif %}
+<div class="admin-head">
+<h1>{{ heading }}</h1>
+<div class="actions">
+{%- if saved %}
+<span class="saved" role="status">已保存</span>
+{%- endif %}
+<button type="submit" data-save title="Ctrl/⌘+S">保存</button>
+<button type="submit" class="secondary" formaction="/admin/preview" formtarget="_blank">预览</button>
+{%- if let Some(href) = delete_href %}
+<a class="button danger" href="{{ href }}">删除</a>
+{%- endif %}
+</div>
+</div>
+{%- if let Some(error) = error %}
+<p class="error" role="alert">保存失败：{{ error }}</p>
+{%- endif %}
+{%- if timezone_changed %}
+<p class="notice" role="status">时区改了。已保存文章的发布时间不会自动变，请在服务器上执行 <code>cat-blog rerender</code> 按新时区重算。</p>
+{%- endif %}
+<textarea name="source" spellcheck="false" aria-label="原文" autofocus>
+{{ source }}</textarea>
+</form>
+{% endblock %}

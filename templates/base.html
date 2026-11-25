@@ -7,6 +7,9 @@
 {%- if !layout.description.is_empty() %}
 <meta name="description" content="{{ layout.description }}">
 {%- endif %}
+{%- if layout.noindex %}
+<meta name="robots" content="noindex">
+{%- endif %}
 <script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="{{ layout.assets.css }}">
 <link rel="icon" href="{{ layout.assets.favicon }}" type="image/svg+xml">

@@ -3,7 +3,7 @@
 use std::fmt;
 
 use cat_blog_core::frontmatter::Kind;
-use cat_blog_core::save::PreparedEntry;
+use cat_blog_core::save::{PreparedEntry, Stored};
 use cat_blog_core::slug::Slug;
 use cat_blog_core::tags::Tag;
 use cat_blog_core::visibility;
@@ -37,6 +37,14 @@ impl Post {
     /// 公开站点能否看到这篇内容（§5.4）。
     pub fn is_visible(&self, now: Timestamp) -> bool {
         visibility::is_visible(self.draft, self.published_at, now)
+    }
+
+    /// 再次保存时要沿用的 slug 和发布时间（§5.3、§5.4）。
+    pub fn stored(&self) -> Stored<'_> {
+        Stored {
+            slug: &self.slug,
+            published_at: self.published_at,
+        }
     }
 }
 

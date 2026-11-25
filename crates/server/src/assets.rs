@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 
 const STYLE: &str = include_str!("../../../static/style.css");
 const THEME_JS: &str = include_str!("../../../static/theme.js");
+const EDITOR_JS: &str = include_str!("../../../static/editor.js");
 const FAVICON: &str = include_str!("../../../static/favicon.svg");
 
 /// 一个静态文件。
@@ -35,6 +36,8 @@ impl Asset {
 pub struct Assets {
     pub css: Asset,
     pub js: Asset,
+    /// 后台编辑页的快捷键和离开提醒（D26）。
+    pub editor: Asset,
     pub favicon: Asset,
 }
 
@@ -54,12 +57,17 @@ impl Assets {
                 "text/javascript; charset=utf-8",
                 THEME_JS.to_owned(),
             ),
+            editor: Asset::new(
+                "editor.js",
+                "text/javascript; charset=utf-8",
+                EDITOR_JS.to_owned(),
+            ),
             favicon: Asset::new("favicon.svg", "image/svg+xml", FAVICON.to_owned()),
         }
     }
 
     pub fn get(&self, name: &str) -> Option<&Asset> {
-        [&self.css, &self.js, &self.favicon]
+        [&self.css, &self.js, &self.editor, &self.favicon]
             .into_iter()
             .find(|a| a.name == name)
     }

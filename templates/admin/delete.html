@@ -1,0 +1,10 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<h1>删除确认</h1>
+<p>确定要删除{{ label }}《{{ title }}》吗？删除后无法恢复。</p>
+<form method="post" action="{{ action }}" class="actions">
+<input type="hidden" name="_csrf" value="{{ csrf }}">
+<button type="submit" class="danger">确认删除</button>
+<a href="{{ back }}">取消</a>
+</form>
+{% endblock %}

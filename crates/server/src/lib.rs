@@ -17,16 +17,19 @@ use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::get;
+use cat_blog_core::markdown::Renderer;
+use ipnet::IpNet;
 use sqlx::SqlitePool;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
 use crate::assets::Assets;
+use crate::auth::limiter::LoginLimiter;
 use crate::clock::Clock;
 use crate::config::Config;
 use crate::db::BlogDb;
-use crate::routes::{feed, public};
+use crate::routes::{admin, feed, public};
 
 /// 请求体上限（D62），超出时返回 413。
 pub const BODY_LIMIT: usize = 2 * 1024 * 1024;
@@ -39,17 +42,35 @@ pub struct AppState {
     blog: BlogDb,
     /// 去掉了末尾 `/` 的 `BASE_URL`。
     base_url: Arc<str>,
+    /// `BASE_URL` 的 origin（`scheme://host[:port]`），登录时和 `Origin` 头比较（D47）。
+    origin: Arc<str>,
+    /// 会话 cookie 是否带 `Secure`（D36）。
+    secure_cookies: bool,
+    trusted_proxies: Arc<[IpNet]>,
+    limiter: Arc<LoginLimiter>,
     clock: Arc<dyn Clock>,
+    renderer: Arc<Renderer>,
     assets: Arc<Assets>,
 }
 
 impl AppState {
-    pub fn new(pool: SqlitePool, blog: BlogDb, config: &Config, clock: Arc<dyn Clock>) -> Self {
+    pub fn new(
+        pool: SqlitePool,
+        blog: BlogDb,
+        config: &Config,
+        clock: Arc<dyn Clock>,
+        renderer: Arc<Renderer>,
+    ) -> Self {
         Self {
             pool,
             blog,
             base_url: config.base_url.as_str().into(),
+            origin: config.origin().into(),
+            secure_cookies: config.is_https(),
+            trusted_proxies: config.trusted_proxies.as_slice().into(),
+            limiter: Arc::new(LoginLimiter::default()),
             clock,
+            renderer,
             assets: Arc::new(Assets::new()),
         }
     }
@@ -73,6 +94,7 @@ pub fn app(state: AppState) -> Router {
         .route("/static/{name}", get(public::asset))
         .route("/favicon.ico", get(public::favicon))
         .route("/healthz", get(healthz))
+        .merge(admin::router(state.clone()))
         .fallback(get(public::entry))
         .with_state(state)
         .layer(RequestBodyLimitLayer::new(BODY_LIMIT))

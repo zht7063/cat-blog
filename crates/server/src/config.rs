@@ -101,6 +101,21 @@ impl Config {
     pub fn is_https(&self) -> bool {
         self.base_url.starts_with("https://")
     }
+
+    /// `BASE_URL` 去掉路径后的 origin，如 `https://example.com:8443`。和浏览器发的 `Origin`
+    /// 一样，scheme 和主机名小写，默认端口（https 的 443、http 的 80）省略。
+    pub fn origin(&self) -> String {
+        let after_scheme = self.base_url.find("://").map_or(0, |i| i + 3);
+        let end = self.base_url[after_scheme..]
+            .find('/')
+            .map_or(self.base_url.len(), |i| after_scheme + i);
+        let origin = self.base_url[..end].to_ascii_lowercase();
+        let default_port = if self.is_https() { ":443" } else { ":80" };
+        match origin.strip_suffix(default_port) {
+            Some(without) => without.to_owned(),
+            None => origin,
+        }
+    }
 }
 
 fn parse_base_url(value: &str) -> Result<String, ConfigError> {
@@ -201,6 +216,20 @@ mod tests {
         ("ADMIN_PASSWORD", "correct horse battery"),
         ("BASE_URL", "https://example.com/"),
     ];
+
+    #[test]
+    fn origin_matches_what_browsers_send() {
+        for (base, origin) in [
+            ("https://Example.com/blog/", "https://example.com"),
+            ("https://example.com:443", "https://example.com"),
+            ("http://example.com:80/x", "http://example.com"),
+            ("https://example.com:8443", "https://example.com:8443"),
+            ("http://localhost:3000", "http://localhost:3000"),
+        ] {
+            let config = parse(&[("BASE_URL", base)]).unwrap();
+            assert_eq!(config.origin(), origin, "{base}");
+        }
+    }
 
     fn parse(overrides: &[(&'static str, &str)]) -> Result<Config, ConfigError> {
         let mut vars: HashMap<&str, String> =

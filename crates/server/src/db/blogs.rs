@@ -17,6 +17,7 @@ use super::{decode_error, timestamp};
 pub struct BlogDb {
     pub(super) pool: SqlitePool,
     pub(super) id: i64,
+    owner: UserId,
 }
 
 /// `blogs` 的一行：首页原文、渲染结果和从首页 front matter 解析出的站点设置。
@@ -45,6 +46,7 @@ impl BlogDb {
         Ok(id.map(|id| Self {
             pool: pool.clone(),
             id,
+            owner: user,
         }))
     }
 
@@ -84,7 +86,13 @@ impl BlogDb {
         Ok(Self {
             pool: pool.clone(),
             id,
+            owner: user,
         })
+    }
+
+    /// 拥有这个博客的用户。后台按它判断当前会话能否管理这个博客（D18）。
+    pub fn owner(&self) -> UserId {
+        self.owner
     }
 
     /// 博客的 id，只用于对外的稳定标识，比如 RSS 的 guid（D75）。

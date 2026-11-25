@@ -125,3 +125,43 @@ ul.post-list { list-style: none; padding: 0; }
 ul.post-list li { display: flex; gap: 16px; padding: 3px 0; }
 ul.post-list time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
 .empty { color: var(--muted); }
+
+/* 后台（D26）。编辑页的文本框占满屏幕高度。 */
+body.admin .wrap { max-width: 1040px; }
+.admin-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+nav.admin-nav a { margin-right: 0; }
+.admin-nav span { color: var(--muted); }
+.admin-nav form { display: inline; margin: 0; }
+.admin-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0.8em 0 0.6em; }
+.admin-head h1 { margin: 0; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+button, .button {
+  font: inherit; font-size: 0.95em; line-height: 1.4;
+  padding: 6px 16px;
+  border: 1px solid var(--link); border-radius: 6px;
+  background: var(--link); color: var(--bg);
+  cursor: pointer; text-decoration: none; display: inline-block;
+}
+button.secondary { background: transparent; color: var(--link); }
+button.danger, .button.danger { background: transparent; border-color: #cf222e; color: #cf222e; }
+button.link { background: none; border: none; padding: 0; color: var(--link); text-decoration: underline; font-size: 1em; }
+.error { border: 1px solid #cf222e; border-left-width: 4px; border-radius: 6px; padding: 8px 12px; color: inherit; background: color-mix(in srgb, #cf222e 8%, transparent); white-space: pre-wrap; }
+.notice { border: 1px solid var(--border); border-left: 4px solid var(--link); border-radius: 6px; padding: 8px 12px; }
+.saved { color: #1a7f37; font-weight: 600; }
+.editor textarea {
+  display: block; width: 100%;
+  height: calc(100vh - 230px); min-height: 320px;
+  padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--code-bg); color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 15px; line-height: 1.6;
+  resize: vertical; tab-size: 2;
+}
+form.login { display: flex; flex-direction: column; gap: 12px; max-width: 320px; }
+form.login label { display: flex; flex-direction: column; gap: 4px; }
+form.login input { font: inherit; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); }
+table.admin-list { display: table; width: 100%; }
+.admin-list th { text-align: left; }
+.admin-list td:nth-child(2) { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.badge { font-size: 0.85em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }

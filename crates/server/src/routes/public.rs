@@ -2,7 +2,7 @@
 
 use askama::Template;
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderValue, StatusCode, Uri, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use axum::response::{Html, IntoResponse, Response};
 use cat_blog_core::date;
 use cat_blog_core::frontmatter::Kind;
@@ -12,7 +12,7 @@ use cat_blog_core::tags::{self, Tag};
 use jiff::Timestamp;
 use serde::Deserialize;
 
-use super::{AppResult, Layout, not_found};
+use super::{AppResult, Layout, admin, no_store, not_found};
 use crate::AppState;
 use crate::db::Blog;
 use crate::render::{expand_posts, list_items, post_list};
@@ -50,11 +50,11 @@ struct EntryPage<'a> {
 /// 首页正文，不另显示 h1（§8.1）。
 pub async fn home(State(state): State<AppState>) -> AppResult {
     let blog = state.blog.blog().await?;
-    render_home(&state, &blog).await
+    render_home(&state, &blog, false).await
 }
 
-/// 按 `blog` 的首页和站点设置渲染首页。
-async fn render_home(state: &AppState, blog: &Blog) -> AppResult {
+/// 按 `blog` 的首页和站点设置渲染首页。`private` 为真（预览）时加 `noindex` 和 `no-store`（D68）。
+pub(super) async fn render_home(state: &AppState, blog: &Blog, private: bool) -> AppResult {
     let texts = i18n::texts(&blog.lang);
     let body = expand_posts(
         &state.blog,
@@ -64,11 +64,10 @@ async fn render_home(state: &AppState, blog: &Blog) -> AppResult {
         state.clock.now(),
     )
     .await?;
-    let page = HomePage {
-        layout: Layout::new(blog, &state.assets, "", ""),
-        body,
-    };
-    Ok(Html(page.render()?).into_response())
+    let mut layout = Layout::new(blog, &state.assets, "", "");
+    layout.noindex = private;
+    let page = HomePage { layout, body };
+    Ok(private_if(private, Html(page.render()?).into_response()))
 }
 
 #[derive(Deserialize)]
@@ -105,17 +104,22 @@ pub async fn blog(State(state): State<AppState>, Query(query): Query<BlogQuery>)
     Ok(Html(page.render()?).into_response())
 }
 
-/// 其余的 GET 请求：按 `/{slug}/` 找页面或文章（§8.2）。
-pub async fn entry(State(state): State<AppState>, uri: Uri) -> AppResult {
+/// 其余的 GET 请求：按 `/{slug}/` 找页面或文章（§8.2）。不可见的内容只有已登录的管理员能看到
+/// （D12、D68）。
+pub async fn entry(State(state): State<AppState>, uri: Uri, headers: HeaderMap) -> AppResult {
     let Some(target) = resolve(uri.path()) else {
         return not_found(&state).await;
     };
-    let post = match state.blog.post_by_slug(&target.slug).await? {
-        Some(post) if post.is_visible(state.clock.now()) => post,
-        _ => return not_found(&state).await,
+    let Some(post) = state.blog.post_by_slug(&target.slug).await? else {
+        return not_found(&state).await;
     };
+    let visible = post.is_visible(state.clock.now());
+    if !visible && admin::current_session(&state, &headers).await?.is_none() {
+        return not_found(&state).await;
+    }
     if !target.canonical {
-        return Ok(moved_permanently(&post.slug.path(), &uri));
+        let redirect = moved_permanently(&post.slug.path(), &uri);
+        return Ok(private_if(!visible, redirect));
     }
     let blog = state.blog.blog().await?;
     let view = EntryView {
@@ -126,11 +130,11 @@ pub async fn entry(State(state): State<AppState>, uri: Uri) -> AppResult {
         tags: &post.tags,
         html: &post.html,
     };
-    render_entry(&state, &blog, view).await
+    render_entry(&state, &blog, view, !visible).await
 }
 
 /// 页面或文章页要显示的内容，来自库里的一行或预览时的原文。
-struct EntryView<'a> {
+pub(super) struct EntryView<'a> {
     pub kind: Kind,
     pub title: &'a str,
     pub description: &'a str,
@@ -139,8 +143,14 @@ struct EntryView<'a> {
     pub html: &'a str,
 }
 
-/// 页面：标题和正文；文章：标题、日期、标签和正文（§8.1）。
-async fn render_entry(state: &AppState, blog: &Blog, view: EntryView<'_>) -> AppResult {
+/// 页面：标题和正文；文章：标题、日期、标签和正文（§8.1）。`private` 为真时加 `noindex` 和
+/// `no-store`（D68）。
+pub(super) async fn render_entry(
+    state: &AppState,
+    blog: &Blog,
+    view: EntryView<'_>,
+    private: bool,
+) -> AppResult {
     let texts = i18n::texts(&blog.lang);
     let body = expand_posts(
         &state.blog,
@@ -164,14 +174,24 @@ async fn render_entry(state: &AppState, blog: &Blog, view: EntryView<'_>) -> App
                 .collect(),
         ),
     };
+    let mut layout = Layout::new(blog, &state.assets, view.title, view.description);
+    layout.noindex = private;
     let page = EntryPage {
-        layout: Layout::new(blog, &state.assets, view.title, view.description),
+        layout,
         title: view.title.to_owned(),
         date,
         tags,
         body,
     };
-    Ok(Html(page.render()?).into_response())
+    Ok(private_if(private, Html(page.render()?).into_response()))
+}
+
+fn private_if(private: bool, response: Response) -> Response {
+    if private {
+        no_store(response)
+    } else {
+        response
+    }
 }
 
 /// 请求路径对应的 slug，以及请求的写法是否已经是规范地址。

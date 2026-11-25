@@ -12,6 +12,9 @@ use crate::frontmatter::{Body, Home};
 use crate::sanitize::Sanitizer;
 use crate::{ContentError, ContentErrorKind};
 
+/// 代码高亮 class 的前缀（D51），避免和站点样式的 class（如 `.meta`）互相影响。
+const HIGHLIGHT_CLASS_PREFIX: &str = "hl-";
+
 /// Markdown 渲染器。加载 syntect 的语法集较慢，启动时构造一次，重复使用。
 pub struct Renderer {
     highlighter: SyntectAdapter,
@@ -39,7 +42,9 @@ fn comrak_options() -> Options<'static> {
 impl Renderer {
     pub fn new() -> Self {
         Self {
-            highlighter: SyntectAdapterBuilder::new().css().build(),
+            highlighter: SyntectAdapterBuilder::new()
+                .css_with_class_prefix(HIGHLIGHT_CLASS_PREFIX)
+                .build(),
             sanitizer: Sanitizer::new(),
         }
     }
@@ -112,20 +117,19 @@ impl Renderer {
 pub fn highlight_css() -> String {
     let themes = ThemeSet::load_defaults();
     let css = |name: &str| {
-        #[expect(
-            clippy::expect_used,
-            reason = "两个主题都是 syntect 内置的，Spaced 风格不需要前缀，生成不会失败"
-        )]
+        #[expect(clippy::expect_used, reason = "两个主题都是 syntect 内置的")]
         let theme = themes
             .themes
             .get(name)
             .expect("syntect has the built-in theme");
-        #[expect(
-            clippy::expect_used,
-            reason = "Spaced 风格不带前缀，syntect 只在带前缀的风格上可能报错"
-        )]
-        css_for_theme_with_class_style(theme, ClassStyle::Spaced)
-            .expect("generating theme CSS failed")
+        #[expect(clippy::expect_used, reason = "syntect 生成主题 CSS 时总是返回 Ok")]
+        css_for_theme_with_class_style(
+            theme,
+            ClassStyle::SpacedPrefixed {
+                prefix: HIGHLIGHT_CLASS_PREFIX,
+            },
+        )
+        .expect("generating theme CSS failed")
     };
     let light = css("InspiredGitHub");
     let dark = css("base16-ocean.dark");
@@ -137,7 +141,7 @@ pub fn highlight_css() -> String {
     )
 }
 
-/// 去掉 syntect 生成的注释，在每个选择器前加上 `prefix`；主题的整体颜色（`.code`）
+/// 去掉 syntect 生成的注释，在每个选择器前加上 `prefix`；主题的整体颜色（`.hl-code`）
 /// 改为作用在渲染出的 `<pre class="syntax-highlighting">` 上。
 fn scope_css(css: &str, prefix: &str) -> String {
     let mut without_comments = String::with_capacity(css.len());
@@ -150,6 +154,7 @@ fn scope_css(css: &str, prefix: &str) -> String {
     }
     without_comments.push_str(rest);
 
+    let theme_selector = format!(".{HIGHLIGHT_CLASS_PREFIX}code");
     let mut out = String::with_capacity(without_comments.len());
     for rule in without_comments.split_inclusive('}') {
         let Some((selectors, body)) = rule.split_once('{') else {
@@ -160,7 +165,7 @@ fn scope_css(css: &str, prefix: &str) -> String {
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| {
-                let s = if s == ".code" {
+                let s = if s == theme_selector {
                     "pre.syntax-highlighting"
                 } else {
                     s
@@ -295,7 +300,7 @@ mod tests {
             "{out}"
         );
         assert!(
-            out.contains(r#"<span class="storage type function rust">fn</span>"#),
+            out.contains(r#"<span class="hl-storage hl-type hl-function hl-rust">fn</span>"#),
             "{out}"
         );
         assert!(!out.contains("style="), "{out}");
@@ -424,7 +429,7 @@ mod tests {
             light.contains(&"pre.syntax-highlighting {".to_owned()),
             "{css}"
         );
-        assert!(light.iter().any(|r| r.starts_with(".storage")), "{css}");
+        assert!(light.iter().any(|r| r.starts_with(".hl-storage")), "{css}");
         assert!(light.iter().all(|r| !r.contains(":root")), "{css}");
         assert!(
             forced.contains(&format!("{dark}pre.syntax-highlighting {{")),

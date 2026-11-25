@@ -3,6 +3,8 @@
 services:
   cat-blog:
     build: ..
+    # 本机有这个镜像（docker load 载入的或上次构建的）时直接用；没有时先尝试拉取（失败），再从源码构建。
+    image: cat-blog:latest
     env_file: .env
     environment:
       # 只信任这个 compose 网络里的地址，也就是 Caddy（D38）。

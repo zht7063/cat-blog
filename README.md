@@ -46,6 +46,34 @@ docker compose up -d --build
 
 第一次启动后打开 `https://<你的域名>/admin/` 登录。首页有默认的欢迎文字，文章列表里有一篇示例草稿。
 
+### 在别的机器上构建，拷到服务器上启动
+
+在 2 GB 内存的服务器上编译 Rust 容易内存不足：在 4 核机器上构建时，内存占用最多增加约 1.3 GB。可以在另一台 x86_64 的机器上构建镜像，再拷到服务器上。运行时 cat-blog 空闲约 9 MB，有少量访问时约 30 MB，Caddy 约 15–30 MB，2 核 2 GB 的服务器够用。
+
+在构建机上：
+
+```sh
+git clone https://github.com/zht7063/cat-blog.git
+cd cat-blog
+git checkout v1.0.0
+docker build -t cat-blog:v1.0.0 -t cat-blog:latest .
+docker save cat-blog:v1.0.0 cat-blog:latest | gzip > cat-blog-v1.0.0.tar.gz   # 约 35 MB
+scp cat-blog-v1.0.0.tar.gz user@your-vps:
+```
+
+在服务器上：
+
+```sh
+docker load -i cat-blog-v1.0.0.tar.gz        # 载入 cat-blog:v1.0.0 和 cat-blog:latest
+git clone --branch v1.0.0 https://github.com/zht7063/cat-blog.git   # 只用到 deploy/ 和 .env.example
+cd cat-blog/deploy
+cp ../.env.example .env && chmod 600 .env   # 填好 ADMIN_PASSWORD、BASE_URL
+docker compose up -d                        # 不加 --build：直接用载入的 cat-blog:latest
+curl -s https://<你的域名>/healthz          # 返回 ok
+```
+
+`docker-compose.yml` 里 cat-blog 服务的镜像名是 `cat-blog:latest`，本机已有这个镜像时 `docker compose up -d` 不构建；没有时先尝试拉取（提示 `pull access denied`，可以忽略）再从源码构建；`--build` 总是重新构建。镜像不发布到任何镜像仓库，只在自己的机器之间拷贝。
+
 ## 不用 Docker 部署
 
 ```sh
@@ -105,6 +133,8 @@ docker compose exec cat-blog cat-blog backup /data/backups/cat-blog-2026-11-24.d
 git pull
 cd deploy && docker compose up -d --build     # 或重新 cargo build、安装后 systemctl restart cat-blog
 ```
+
+在别的机器上构建的：按“在别的机器上构建，拷到服务器上启动”一节，用新版本的标签构建、导出、在服务器上 `docker load`，再在服务器的仓库里执行 `git fetch --tags && git checkout <新标签>`，然后在 `deploy/` 里执行 `docker compose up -d`（不加 `--build`），compose 发现 `cat-blog:latest` 变了会重建容器。
 
 数据库迁移在服务启动时自动执行，所以 `rerender` 要等新版本的服务启动过一次再执行。正文是保存时渲染好存进库里的，升级后已有内容不会自动用上新的渲染规则（比如 Markdown 或清洗规则变了）。需要时执行：
 

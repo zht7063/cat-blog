@@ -83,10 +83,11 @@ async fn serve(config: &Config) -> Result<(), CommandError> {
     let state = AppState::new(pool.clone(), blog, config, clock, renderer);
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
+    let shutdown = shutdown_signal()?;
     tracing::info!(addr = %listener.local_addr()?, "listening");
     let service = app(state).into_make_service_with_connect_info::<SocketAddr>();
     axum::serve(listener, service)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown)
         .await?;
     pool.close().await;
     tracing::info!("stopped");
@@ -132,33 +133,30 @@ async fn run_backup(config: &Config, target: &Path) -> Result<(), CommandError> 
     Ok(())
 }
 
-/// SIGTERM 或 Ctrl+C 到来时返回。之后 axum 不再接收新连接，等进行中的请求结束（§4.1 第 6 步）。
-async fn shutdown_signal() {
-    let ctrl_c = async {
+/// 注册 SIGTERM 和 Ctrl+C 的处理，返回一个在信号到来时完成的 future。之后 axum 不再接收新连接，
+/// 等进行中的请求结束（§4.1 第 6 步）。要在打印 `listening` 之前调用：从那以后收到的信号都按
+/// 优雅退出处理，不会按默认行为直接结束进程。
+#[cfg(unix)]
+fn shutdown_signal() -> std::io::Result<impl Future<Output = ()>> {
+    use tokio::signal::unix::{SignalKind, signal};
+    let mut terminate = signal(SignalKind::terminate())?;
+    let mut interrupt = signal(SignalKind::interrupt())?;
+    Ok(async move {
+        tokio::select! {
+            _ = terminate.recv() => {}
+            _ = interrupt.recv() => {}
+        }
+        tracing::info!("shutting down, waiting for in-flight requests");
+    })
+}
+
+#[cfg(not(unix))]
+fn shutdown_signal() -> std::io::Result<impl Future<Output = ()>> {
+    Ok(async {
         if let Err(error) = tokio::signal::ctrl_c().await {
             tracing::error!(%error, "Ctrl+C handler could not be installed");
             std::future::pending::<()>().await;
         }
-    };
-    #[cfg(unix)]
-    let terminate = async {
-        use tokio::signal::unix::{SignalKind, signal};
-        match signal(SignalKind::terminate()) {
-            Ok(mut sigterm) => {
-                sigterm.recv().await;
-            }
-            Err(error) => {
-                tracing::error!(%error, "SIGTERM handler could not be installed");
-                std::future::pending::<()>().await;
-            }
-        }
-    };
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        () = ctrl_c => {}
-        () = terminate => {}
-    }
-    tracing::info!("shutting down, waiting for in-flight requests");
+        tracing::info!("shutting down, waiting for in-flight requests");
+    })
 }

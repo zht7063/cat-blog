@@ -1,10 +1,10 @@
 //! `cat-blog backup <目标文件>`（D40，docs/v1.0-spec.md §10.3）。
 
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io;
 #[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use sqlx::SqlitePool;
@@ -13,7 +13,7 @@ use crate::db;
 
 /// 用 `VACUUM INTO` 把数据库导出到 `target`，再对副本执行 `PRAGMA integrity_check`。
 /// 副本里有密码哈希和会话哈希，所以先以权限 600 新建空的目标文件，再往里写；
-/// 目标文件已存在时报错，不覆盖。目标目录不存在时创建。失败时删掉写了一半的副本，
+/// 目标文件已存在时报错，不覆盖。目标目录不存在时以权限 700 创建。失败时删掉写了一半的副本，
 /// 只有完整性检查不通过的副本留在原处，方便检查。
 pub async fn run(pool: &SqlitePool, target: &Path) -> Result<(), BackupError> {
     let target_str = target
@@ -55,7 +55,11 @@ async fn write_and_check(
 fn create_private_file(target: &Path) -> Result<(), BackupError> {
     let io_error = |error| BackupError::Io(target.to_owned(), error);
     if let Some(dir) = target.parent().filter(|dir| !dir.as_os_str().is_empty()) {
-        fs::create_dir_all(dir).map_err(io_error)?;
+        let mut builder = DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        builder.mode(0o700);
+        builder.create(dir).map_err(io_error)?;
     }
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);

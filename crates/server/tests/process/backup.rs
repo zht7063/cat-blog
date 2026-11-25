@@ -113,6 +113,15 @@ async fn backup_while_writing_is_consistent_private_and_never_overwrites() {
     let copy = dir.path().join(BACKUP);
     let mode = fs::metadata(&copy).unwrap().permissions().mode();
     assert_eq!(mode & 0o777, 0o600, "backup mode is {mode:o}");
+    let dir_mode = fs::metadata(copy.parent().unwrap())
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(
+        dir_mode & 0o777,
+        0o700,
+        "created directory mode is {dir_mode:o}"
+    );
     let files: Vec<_> = fs::read_dir(copy.parent().unwrap())
         .unwrap()
         .map(|e| e.unwrap().file_name())

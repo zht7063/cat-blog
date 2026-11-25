@@ -49,6 +49,7 @@ pub struct Home<'a> {
     pub timezone: TimeZone,
     pub nav: String,
     pub body: Body<'a>,
+    pub(crate) nav_line: Option<usize>,
 }
 
 /// 页面或文章的 front matter。
@@ -255,6 +256,7 @@ pub fn parse_home(src: &Source) -> Result<Home<'_>, ContentError> {
         timezone,
         nav: non_empty(raw.nav).unwrap_or_else(|| DEFAULT_NAV.to_owned()),
         body: split.body,
+        nav_line: split.key_line("nav"),
     })
 }
 

@@ -6,7 +6,7 @@ use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::{Arena, Options, options};
 
 use crate::directive::{self, PostsDirective};
-use crate::frontmatter::Body;
+use crate::frontmatter::{Body, Home};
 use crate::sanitize::Sanitizer;
 use crate::{ContentError, ContentErrorKind};
 
@@ -75,6 +75,32 @@ impl Renderer {
                 html.replace(&placeholder_html(&token, i), &d.to_marker())
             }));
         }
+    }
+
+    /// 把首页的 `nav` 渲染为清洗后的行内 HTML（D65），不带外层 `<p>`；
+    /// 分成几段时用空格连接。写了块级内容时报错，行号指向 `nav:` 那一行。
+    pub fn render_nav(&self, home: &Home<'_>) -> Result<String, ContentError> {
+        let options = comrak_options();
+        let arena = Arena::new();
+        let root = comrak::parse_document(&arena, &home.nav, &options);
+        let mut html = String::new();
+        for (i, block) in root.children().enumerate() {
+            if !matches!(block.data().value, NodeValue::Paragraph) {
+                return Err(ContentError::new(
+                    home.nav_line,
+                    ContentErrorKind::NavNotInline,
+                ));
+            }
+            if i > 0 {
+                html.push(' ');
+            }
+            for inline in block.children() {
+                #[expect(clippy::expect_used, reason = "写入 String 不会失败")]
+                comrak::format_html(inline, &options, &mut html)
+                    .expect("formatting into a String failed");
+            }
+        }
+        Ok(self.sanitizer.clean(&html))
     }
 }
 
@@ -271,5 +297,36 @@ mod tests {
              <iframe src=\"https://www.youtube.com/embed/y\" />\n<!--cat-blog:posts-->\n",
         );
         assert!(!out.contains("cat-blog:posts"), "{out}");
+    }
+
+    fn nav(source: &str) -> Result<String, ContentError> {
+        let src = crate::frontmatter::Source::new(source);
+        let home = crate::frontmatter::parse_home(&src).unwrap();
+        RENDERER.render_nav(&home)
+    }
+
+    #[test]
+    fn nav_renders_inline_without_paragraph() {
+        let out = nav("---\ntitle: x\n---\n").unwrap();
+        assert_eq!(
+            out,
+            r#"<a href="/" rel="noopener noreferrer">Home</a> <a href="/blog/" rel="noopener noreferrer">Blog</a>"#
+        );
+    }
+
+    #[test]
+    fn nav_joins_paragraphs_and_is_sanitized() {
+        let out = nav("---\nnav: \"[A](/a/)\\n\\n<b onclick=x>B</b>\"\n---\n").unwrap();
+        assert_eq!(
+            out,
+            r#"<a href="/a/" rel="noopener noreferrer">A</a> <b>B</b>"#
+        );
+    }
+
+    #[test]
+    fn nav_with_block_content_reports_nav_line() {
+        let err = nav("---\ntitle: x\nnav: \"- [A](/a/)\"\n---\n").unwrap_err();
+        assert_eq!(err.line, Some(3));
+        assert_eq!(err.kind, ContentErrorKind::NavNotInline);
     }
 }

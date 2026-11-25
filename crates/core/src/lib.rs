@@ -8,6 +8,7 @@ pub mod directive;
 pub mod frontmatter;
 pub mod markdown;
 pub mod sanitize;
+pub mod save;
 pub mod slug;
 pub mod tags;
 pub mod visibility;
@@ -52,6 +53,8 @@ pub enum ContentErrorKind {
     /// front matter 的写法特殊（比如带引号的键名），写回 slug 后再解析得不到这个 slug。
     SlugWriteBack(String),
     Directive(directive::DirectiveError),
+    /// `nav` 里写了标题、列表等块级内容。
+    NavNotInline,
 }
 
 impl ContentError {
@@ -105,6 +108,9 @@ impl fmt::Display for ContentErrorKind {
                 "无法把 slug 自动写回 front matter，请在 title 下面手动加一行 slug: \"{slug}\""
             ),
             Self::Directive(e) => e.fmt(f),
+            Self::NavNotInline => f.write_str(
+                "nav 只能写链接和文字，不能写标题、列表或代码块，比如 nav: \"[Home](/) [Blog](/blog/)\"",
+            ),
         }
     }
 }

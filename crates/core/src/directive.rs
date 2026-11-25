@@ -4,6 +4,7 @@ use std::fmt;
 use std::fmt::Write as _;
 use std::num::NonZeroU32;
 
+use crate::slug::percent_decode;
 use crate::tags::{Tag, TagError};
 
 /// 一条 `{{ posts ... }}`：列出可见文章，可按标签筛选、限制条数。
@@ -120,22 +121,6 @@ impl PostsDirective {
         }
         Some(d)
     }
-}
-
-fn percent_decode(s: &str) -> Option<String> {
-    let mut bytes = Vec::with_capacity(s.len());
-    let mut rest = s.as_bytes();
-    while let Some((&b, tail)) = rest.split_first() {
-        if b == b'%' {
-            let hex = std::str::from_utf8(tail.get(..2)?).ok()?;
-            bytes.push(u8::from_str_radix(hex, 16).ok()?);
-            rest = &tail[2..];
-        } else {
-            bytes.push(b);
-            rest = tail;
-        }
-    }
-    String::from_utf8(bytes).ok()
 }
 
 /// 把 `html` 里的占位注释换成 `expand` 的结果（请求时展开文章列表；RSS 里换成空字符串）。

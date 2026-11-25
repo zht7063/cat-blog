@@ -22,26 +22,7 @@ impl Default for Sanitizer {
 
 impl Sanitizer {
     pub fn new() -> Self {
-        let mut b = ammonia::Builder::default();
-        b.add_generic_attributes(["id", "class", "aria-hidden", "aria-label"])
-            .add_tags(["details", "summary", "section", "input", "iframe"])
-            .add_tag_attributes("input", ["type", "checked"])
-            .set_tag_attribute_value("input", "disabled", "")
-            .add_tag_attributes(
-                "iframe",
-                ["src", "width", "height", "allowfullscreen", "title"],
-            )
-            .attribute_filter(|element, attribute, value| match (element, attribute) {
-                ("iframe", "src") => IFRAME_SRC_PREFIXES
-                    .iter()
-                    .any(|p| value.starts_with(p))
-                    .then_some(Cow::Borrowed(value)),
-                ("input", "type") => value
-                    .eq_ignore_ascii_case("checkbox")
-                    .then_some(Cow::Borrowed("checkbox")),
-                _ => Some(Cow::Borrowed(value)),
-            });
-        Self { builder: b }
+        Self { builder: builder() }
     }
 
     /// 清洗 HTML。作者写的注释（包括伪造的 posts 占位）、脚本、事件属性、
@@ -71,6 +52,29 @@ impl Sanitizer {
         )]
         lol_html::rewrite_str(&cleaned, settings).expect("rewriting sanitized HTML failed")
     }
+}
+
+fn builder() -> ammonia::Builder<'static> {
+    let mut b = ammonia::Builder::default();
+    b.add_generic_attributes(["id", "class", "aria-hidden", "aria-label"])
+        .add_tags(["details", "summary", "section", "input", "iframe"])
+        .add_tag_attributes("input", ["type", "checked"])
+        .set_tag_attribute_value("input", "disabled", "")
+        .add_tag_attributes(
+            "iframe",
+            ["src", "width", "height", "allowfullscreen", "title"],
+        )
+        .attribute_filter(|element, attribute, value| match (element, attribute) {
+            ("iframe", "src") => IFRAME_SRC_PREFIXES
+                .iter()
+                .any(|p| value.starts_with(p))
+                .then_some(Cow::Borrowed(value)),
+            ("input", "type") => value
+                .eq_ignore_ascii_case("checkbox")
+                .then_some(Cow::Borrowed("checkbox")),
+            _ => Some(Cow::Borrowed(value)),
+        });
+    b
 }
 
 #[cfg(test)]

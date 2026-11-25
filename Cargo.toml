@@ -13,10 +13,16 @@ axum = "0.8.9"
 dotenvy = "0.15.7"
 jiff = "1.0.3"
 sqlx = { version = "0.9.1", default-features = false, features = ["sqlite", "runtime-tokio", "macros", "migrate"] }
-tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net", "fs"] }
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net", "fs", "signal"] }
 tower = { version = "0.5.3", features = ["util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

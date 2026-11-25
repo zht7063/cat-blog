@@ -1,8 +1,10 @@
 //! cat-blog 服务端：配置、数据库、路由。可执行文件见 `main.rs`。
 
+pub mod auth;
 pub mod clock;
 pub mod config;
 pub mod db;
+pub mod startup;
 
 use axum::Router;
 use axum::extract::State;

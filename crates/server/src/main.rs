@@ -1,7 +1,9 @@
 use std::process::ExitCode;
 
+use cat_blog_core::markdown::Renderer;
+use cat_blog_server::clock::SystemClock;
 use cat_blog_server::config::Config;
-use cat_blog_server::{app, db};
+use cat_blog_server::{app, db, startup};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -44,10 +46,53 @@ fn early_exit(message: &str) -> ExitCode {
     ExitCode::FAILURE
 }
 
-async fn serve(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+async fn serve(config: &Config) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if !config.is_https() {
+        tracing::warn!(
+            base_url = %config.base_url,
+            "BASE_URL is not https://; session cookies will not be Secure, use HTTPS in production"
+        );
+    }
     let pool = db::connect(&config.database_path).await?;
+    startup::prepare(&pool, config, &SystemClock, &Renderer::new()).await?;
+
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
-    tracing::info!(addr = %config.bind_addr, "listening");
-    axum::serve(listener, app(pool)).await?;
+    tracing::info!(addr = %listener.local_addr()?, "listening");
+    axum::serve(listener, app(pool.clone()))
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+    pool.close().await;
+    tracing::info!("stopped");
     Ok(())
+}
+
+/// SIGTERM 或 Ctrl+C 到来时返回。之后 axum 不再接收新连接，等进行中的请求结束（§4.1 第 6 步）。
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!(%error, "Ctrl+C handler could not be installed");
+            std::future::pending::<()>().await;
+        }
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        use tokio::signal::unix::{SignalKind, signal};
+        match signal(SignalKind::terminate()) {
+            Ok(mut sigterm) => {
+                sigterm.recv().await;
+            }
+            Err(error) => {
+                tracing::error!(%error, "SIGTERM handler could not be installed");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {}
+        () = terminate => {}
+    }
+    tracing::info!("shutting down, waiting for in-flight requests");
 }

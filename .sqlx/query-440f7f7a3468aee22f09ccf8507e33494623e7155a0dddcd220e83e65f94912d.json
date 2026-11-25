@@ -1,0 +1,122 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT home_source, home_html, title, description, lang, timezone, nav_html,\n                    created_at, updated_at\n             FROM blogs WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "home_source",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "home_source"
+          }
+        }
+      },
+      {
+        "name": "home_html",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "home_html"
+          }
+        }
+      },
+      {
+        "name": "title",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "name": "description",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "name": "lang",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "lang"
+          }
+        }
+      },
+      {
+        "name": "timezone",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "timezone"
+          }
+        }
+      },
+      {
+        "name": "nav_html",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "nav_html"
+          }
+        }
+      },
+      {
+        "name": "created_at",
+        "ordinal": 7,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 8,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "blogs",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "440f7f7a3468aee22f09ccf8507e33494623e7155a0dddcd220e83e65f94912d"
+}

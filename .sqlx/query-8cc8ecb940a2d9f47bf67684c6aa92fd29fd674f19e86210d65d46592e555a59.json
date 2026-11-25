@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO posts (blog_id, kind, slug, source, html, title, description, tags, draft,\n                            published_at, created_at, updated_at)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 12
+    },
+    "nullable": []
+  },
+  "hash": "8cc8ecb940a2d9f47bf67684c6aa92fd29fd674f19e86210d65d46592e555a59"
+}

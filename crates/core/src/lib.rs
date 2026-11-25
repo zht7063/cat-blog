@@ -6,6 +6,7 @@
 pub mod date;
 pub mod directive;
 pub mod frontmatter;
+pub mod i18n;
 pub mod markdown;
 pub mod sanitize;
 pub mod save;

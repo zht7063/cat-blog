@@ -12,6 +12,7 @@ jiff = { workspace = true, features = ["tzdb-bundle-always"] }
 lol_html = "3.0.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_yaml_ng = "0.10.0"
+syntect = { version = "5.3.0", default-features = false, features = ["default-themes", "html"] }
 unicode-normalization = "0.1.26"
 
 [lints]

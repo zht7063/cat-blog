@@ -226,6 +226,7 @@ dependencies = [
  "lol_html",
  "serde",
  "serde_yaml_ng",
+ "syntect",
  "unicode-normalization",
 ]
 

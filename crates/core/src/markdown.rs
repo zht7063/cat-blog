@@ -4,6 +4,8 @@
 use comrak::nodes::{AstNode, NodeHtmlBlock, NodeValue};
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::{Arena, Options, options};
+use syntect::highlighting::ThemeSet;
+use syntect::html::{ClassStyle, css_for_theme_with_class_style};
 
 use crate::directive::{self, PostsDirective};
 use crate::frontmatter::{Body, Home};
@@ -102,6 +104,78 @@ impl Renderer {
         }
         Ok(self.sanitizer.clean(&html))
     }
+}
+
+/// 代码高亮的 CSS（D51，docs/v1.0-spec.md §8.4）：亮色用 `InspiredGitHub`，暗色用
+/// `base16-ocean.dark`。暗色部分同时写在 `[data-theme="dark"]` 下和 `prefers-color-scheme: dark`
+/// 媒体查询里（手动选了亮色时除外），禁用 JS 时也跟随系统。启动时生成一次。
+pub fn highlight_css() -> String {
+    let themes = ThemeSet::load_defaults();
+    let css = |name: &str| {
+        #[expect(
+            clippy::expect_used,
+            reason = "两个主题都是 syntect 内置的，Spaced 风格不需要前缀，生成不会失败"
+        )]
+        let theme = themes
+            .themes
+            .get(name)
+            .expect("syntect has the built-in theme");
+        #[expect(
+            clippy::expect_used,
+            reason = "Spaced 风格不带前缀，syntect 只在带前缀的风格上可能报错"
+        )]
+        css_for_theme_with_class_style(theme, ClassStyle::Spaced)
+            .expect("generating theme CSS failed")
+    };
+    let light = css("InspiredGitHub");
+    let dark = css("base16-ocean.dark");
+    format!(
+        "{}\n{}\n@media (prefers-color-scheme: dark) {{\n{}}}\n",
+        scope_css(&light, ""),
+        scope_css(&dark, r#":root[data-theme="dark"] "#),
+        scope_css(&dark, r#":root:not([data-theme="light"]) "#),
+    )
+}
+
+/// 去掉 syntect 生成的注释，在每个选择器前加上 `prefix`；主题的整体颜色（`.code`）
+/// 改为作用在渲染出的 `<pre class="syntax-highlighting">` 上。
+fn scope_css(css: &str, prefix: &str) -> String {
+    let mut without_comments = String::with_capacity(css.len());
+    let mut rest = css;
+    while let Some(start) = rest.find("/*") {
+        without_comments.push_str(&rest[..start]);
+        rest = rest[start..]
+            .find("*/")
+            .map_or("", |end| &rest[start + end + 2..]);
+    }
+    without_comments.push_str(rest);
+
+    let mut out = String::with_capacity(without_comments.len());
+    for rule in without_comments.split_inclusive('}') {
+        let Some((selectors, body)) = rule.split_once('{') else {
+            continue;
+        };
+        let selectors: Vec<String> = selectors
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                let s = if s == ".code" {
+                    "pre.syntax-highlighting"
+                } else {
+                    s
+                };
+                format!("{prefix}{s}")
+            })
+            .collect();
+        if !selectors.is_empty() {
+            out.push_str(&selectors.join(", "));
+            out.push_str(" {");
+            out.push_str(body);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 fn placeholder_prefix(salt: u32) -> String {
@@ -328,5 +402,41 @@ mod tests {
         let err = nav("---\ntitle: x\nnav: \"- [A](/a/)\"\n---\n").unwrap_err();
         assert_eq!(err.line, Some(3));
         assert_eq!(err.kind, ContentErrorKind::NavNotInline);
+    }
+
+    #[test]
+    fn highlight_css_has_light_rules_and_scoped_dark_rules() {
+        let css = highlight_css();
+        assert!(!css.contains("/*"), "{css}");
+        let rules = |part: &str| -> Vec<String> {
+            part.lines()
+                .filter(|l| l.contains('{') && !l.starts_with("@media"))
+                .map(str::to_owned)
+                .collect()
+        };
+        let (top, media) = css
+            .split_once("@media (prefers-color-scheme: dark) {")
+            .unwrap();
+        let dark = r#":root[data-theme="dark"] "#;
+        let (forced, light): (Vec<_>, Vec<_>) =
+            rules(top).into_iter().partition(|r| r.starts_with(dark));
+        assert!(
+            light.contains(&"pre.syntax-highlighting {".to_owned()),
+            "{css}"
+        );
+        assert!(light.iter().any(|r| r.starts_with(".storage")), "{css}");
+        assert!(light.iter().all(|r| !r.contains(":root")), "{css}");
+        assert!(
+            forced.contains(&format!("{dark}pre.syntax-highlighting {{")),
+            "{css}"
+        );
+        let media = rules(media);
+        assert_eq!(media.len(), forced.len());
+        for rule in media {
+            assert!(
+                rule.starts_with(r#":root:not([data-theme="light"]) "#),
+                "{rule}"
+            );
+        }
     }
 }

@@ -79,9 +79,33 @@ impl Slug {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// 站内地址 `/{slug}/`，slug 做了百分号编码（docs/v1.0-spec.md §8.2）。
+    pub fn path(&self) -> String {
+        format!("/{}/", percent_encode(&self.0))
+    }
 }
 
-/// 百分号解码。`%` 后面不是两位十六进制数，或解码后不是 UTF-8 时返回 `None`。
+/// 请求路径里的一段（已百分号解码）按 D32 规范化成查库用的形式：NFC，ASCII 字母转小写。
+/// 结果和库里的 slug 相同时就是同一篇内容。
+pub fn lookup_key(segment: &str) -> String {
+    segment.nfc().map(|c| c.to_ascii_lowercase()).collect()
+}
+
+/// 把 slug 或标签放进 URL 时的百分号编码：ASCII 字母、数字和 `-` 原样保留，其余按 UTF-8 字节编码。
+pub fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b == b'-' {
+            out.push(char::from(b));
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// [`percent_encode`] 的逆过程。`%` 后面不是两位十六进制数，或解码后不是 UTF-8 时返回 `None`。
 pub fn percent_decode(s: &str) -> Option<String> {
     let mut bytes = Vec::with_capacity(s.len());
     let mut rest = s.as_bytes();
@@ -219,5 +243,31 @@ mod tests {
         ));
         assert_eq!(parsed("admin-notes"), Ok("admin-notes".into()));
         assert_eq!(parsed("blogs"), Ok("blogs".into()));
+    }
+
+    #[test]
+    fn path_percent_encodes_non_ascii() {
+        let slug = Slug::parse("我的 Rust 笔记").unwrap();
+        assert_eq!(slug.path(), "/%E6%88%91%E7%9A%84-rust-%E7%AC%94%E8%AE%B0/");
+        assert_eq!(percent_encode("c++ & a/b"), "c%2B%2B%20%26%20a%2Fb");
+    }
+
+    #[test]
+    fn percent_decode_reverses_encode() {
+        for s in ["我的-rust-笔记", "c++ & a/b", "plain"] {
+            assert_eq!(percent_decode(&percent_encode(s)).as_deref(), Some(s));
+        }
+        assert_eq!(percent_decode("%E6%88%91").as_deref(), Some("我"));
+        assert_eq!(percent_decode("%E6%88"), None);
+        assert_eq!(percent_decode("%zz"), None);
+        assert_eq!(percent_decode("a%2"), None);
+    }
+
+    #[test]
+    fn lookup_key_matches_stored_slug() {
+        let stored = Slug::parse("Café Notes").unwrap();
+        assert_eq!(lookup_key("Cafe\u{301}-NOTES"), stored.as_str());
+        assert_eq!(lookup_key("我的-Rust-笔记"), "我的-rust-笔记");
+        assert_ne!(lookup_key("café_notes"), stored.as_str());
     }
 }

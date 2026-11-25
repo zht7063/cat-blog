@@ -123,6 +123,11 @@ impl PostsDirective {
     }
 }
 
+/// `html` 里有没有占位注释。没有时请求时不用查文章列表。
+pub fn has_markers(html: &str) -> bool {
+    html.contains(MARKER_PREFIX)
+}
+
 /// 把 `html` 里的占位注释换成 `expand` 的结果（请求时展开文章列表；RSS 里换成空字符串）。
 pub fn expand_markers(html: &str, mut expand: impl FnMut(&PostsDirective) -> String) -> String {
     let mut out = String::with_capacity(html.len());

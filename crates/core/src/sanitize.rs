@@ -25,6 +25,16 @@ impl Sanitizer {
         Self { builder: builder() }
     }
 
+    /// RSS 用的清洗器（docs/v1.0-spec.md §8.3）：规则和 [`Sanitizer::new`] 相同，另外把相对地址
+    /// （包括 `#fn-1` 这类页内锚点）按 `base` 改写成绝对地址。`base` 是这篇文章自己的绝对地址。
+    /// `base` 不是合法的绝对地址时返回 `None`。
+    pub fn with_base(base: &str) -> Option<Self> {
+        let base = ammonia::Url::parse(base).ok()?;
+        let mut b = builder();
+        b.url_relative(ammonia::UrlRelative::RewriteWithBase(base));
+        Some(Self { builder: b })
+    }
+
     /// 清洗 HTML。作者写的注释（包括伪造的 posts 占位）、脚本、事件属性、
     /// `javascript:` 和 `data:` 链接都会被删掉；地址不在白名单里的 iframe 和
     /// 不是 checkbox 的 input 整个删掉，保留的 iframe 里面的内容也删掉。
@@ -192,6 +202,24 @@ mod tests {
         assert_eq!(
             clean(html),
             r##"<details><summary>more</summary>body</details><h2 id="x" class="c"><a href="#x" class="anchor" aria-label="Link" rel="noopener noreferrer"></a>X</h2>"##
+        );
+    }
+
+    #[test]
+    fn feed_cleaning_needs_an_absolute_base() {
+        assert!(Sanitizer::with_base("/relative/").is_none());
+    }
+
+    #[test]
+    fn feed_cleaning_makes_relative_urls_absolute() {
+        let out = Sanitizer::with_base("https://example.com/%E6%88%91/")
+            .unwrap()
+            .clean(
+            r##"<a href="#fn-1">1</a><a href="/blog/">b</a><img src="cat.png"><a href="https://other.example/x">o</a><script>x()</script>"##,
+        );
+        assert_eq!(
+            out,
+            r##"<a href="https://example.com/%E6%88%91/#fn-1" rel="noopener noreferrer">1</a><a href="https://example.com/blog/" rel="noopener noreferrer">b</a><img src="https://example.com/%E6%88%91/cat.png"><a href="https://other.example/x" rel="noopener noreferrer">o</a>"##
         );
     }
 }

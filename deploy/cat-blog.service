@@ -1,0 +1,21 @@
+# 不用 Docker 时的 systemd 服务文件，步骤见 README.md 的“不用 Docker 部署”。
+# .env 放在 WorkingDirectory 里，数据库默认在它下面的 data/cat-blog.db。
+[Unit]
+Description=cat-blog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cat-blog
+Group=cat-blog
+WorkingDirectory=/var/lib/cat-blog
+ExecStart=/usr/local/bin/cat-blog serve
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/cat-blog
+
+[Install]
+WantedBy=multi-user.target

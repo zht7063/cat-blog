@@ -1,0 +1,5 @@
+# 站点地址取 deploy/.env 里的 BASE_URL。https:// 加域名时 Caddy 自动申请 HTTPS 证书。
+{$BASE_URL} {
+	encode zstd gzip
+	reverse_proxy cat-blog:3000
+}

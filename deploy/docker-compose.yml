@@ -1,0 +1,43 @@
+# 在 deploy/ 目录里执行：docker compose up -d --build
+# 配置写在本目录的 .env（从仓库根目录的 .env.example 复制，权限设为 600）。
+services:
+  cat-blog:
+    build: ..
+    env_file: .env
+    environment:
+      # 只信任这个 compose 网络里的地址，也就是 Caddy（D38）。
+      TRUSTED_PROXIES: 172.16.0.0/12
+    volumes:
+      - data:/data
+    restart: unless-stopped
+    # 不对宿主机暴露端口，只有 Caddy 能访问。
+
+  caddy:
+    image: caddy:2
+    environment:
+      # 只把站点地址交给 Caddy，不传 .env 里的管理员密码。
+      BASE_URL: ${BASE_URL:?在 deploy/.env 里设置 BASE_URL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - cat-blog
+    restart: unless-stopped
+
+networks:
+  default:
+    # 固定在 TRUSTED_PROXIES 的范围内。Docker 自动分配的网段不一定在 172.16.0.0/12 里，
+    # 不在时 Caddy 不被信任，所有访客都会按 Caddy 的地址一起被登录限流。
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  data:
+  caddy_data:
+  caddy_config:

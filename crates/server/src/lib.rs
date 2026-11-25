@@ -3,6 +3,7 @@
 pub mod assets;
 pub mod auth;
 pub mod clock;
+pub mod commands;
 pub mod config;
 pub mod db;
 mod render;

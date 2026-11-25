@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE blogs SET home_html = ?, title = ?, description = ?, lang = ?, timezone = ?,\n                              nav_html = ?\n             WHERE id = ? AND home_source = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "cb2adb68afe2b336348152d58fea71b25f993a3abad0113761d7c99c8fd813b8"
+}

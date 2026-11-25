@@ -148,6 +148,29 @@ impl BlogDb {
         .await?;
         Ok(())
     }
+
+    /// `cat-blog rerender` 重新处理首页后，只写由原文得出的列，不改原文和 `updated_at`
+    /// （docs/v1.0-spec.md §7.1）。库里的原文已经不是 `home.source`（期间在后台保存过）时
+    /// 不写，返回 `false`。
+    pub async fn rerender_home(&self, home: &PreparedHome) -> Result<bool, sqlx::Error> {
+        let timezone = timezone_name(&home.timezone)?;
+        let result = sqlx::query!(
+            "UPDATE blogs SET home_html = ?, title = ?, description = ?, lang = ?, timezone = ?,
+                              nav_html = ?
+             WHERE id = ? AND home_source = ?",
+            home.html,
+            home.title,
+            home.description,
+            home.lang,
+            timezone,
+            home.nav_html,
+            self.id,
+            home.source,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
 }
 
 /// 时区存 IANA 名称；首页解析出的时区总是按名称查到的，这里没有名称说明是程序的错。

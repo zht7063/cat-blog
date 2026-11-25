@@ -341,6 +341,37 @@ impl BlogDb {
         Ok(result.rows_affected() == 1)
     }
 
+    /// `cat-blog rerender` 重新处理一篇内容后，只写由原文得出的列，不改原文、slug 和
+    /// `updated_at`（docs/v1.0-spec.md §7.1）。库里的原文或 slug 已经和 `entry` 不同
+    /// （期间在后台保存过）时不写，返回 `false`。
+    pub async fn rerender_post(
+        &self,
+        id: PostId,
+        entry: &PreparedEntry,
+    ) -> Result<bool, sqlx::Error> {
+        let tags = tags_json(&entry.tags)?;
+        let published_at = entry.published_at.map(Timestamp::as_second);
+        let slug = entry.slug.as_str();
+        let result = sqlx::query!(
+            "UPDATE posts SET html = ?, title = ?, description = ?, tags = ?, draft = ?,
+                              published_at = ?
+             WHERE blog_id = ? AND id = ? AND source = ? AND slug = ?",
+            entry.html,
+            entry.title,
+            entry.description,
+            tags,
+            entry.draft,
+            published_at,
+            self.id,
+            id.0,
+            entry.source,
+            slug,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
     /// 删除页面或文章（D76 确认之后）。这篇内容不在这个博客里时返回 `false`。
     pub async fn delete_post(&self, id: PostId) -> Result<bool, sqlx::Error> {
         let result = sqlx::query!(
